@@ -3,7 +3,7 @@ name: Android Appium CI
 on:
   push:
     branches: [ main, master, develop ]
-  workflow_dispatch:  # 支持手动触发
+  workflow_dispatch:
 
 jobs:
   build-and-test:
@@ -19,22 +19,22 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # ===== 关键改动 1：进入你本地工程目录，赋权 =====
-      - name: Grant execute permission for gradlew (local project)
+      # ===== 1. 构建 Android APK（你本地工程） =====
+      - name: Grant execute permission for gradlew (gpf_android)
         run: chmod +x /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android/gradlew
 
-      # ===== 关键改动 2：用绝对路径在你本地工程里构建 =====
-      - name: Build Debug APK (local project)
+      - name: Build Debug APK (gpf_android)
         working-directory: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android
         run: ./gradlew assembleStgDebug --stacktrace
 
+      # ===== 2. 启动 Appium Server，显式绑定 127.0.0.1:4723 =====
       - name: Start Appium Server
         run: |
           if lsof -i :4723 > /dev/null 2>&1; then
             echo "Appium 已在 4723 端口运行，跳过启动"
           else
-            echo "启动 Appium Server..."
-            appium --log-level error --log ./appium.log &
+            echo "启动 Appium Server on 127.0.0.1:4723 ..."
+            appium --address 127.0.0.1 --port 4723 --log-level error --log ./appium.log &
             for i in {1..30}; do
               if curl -s http://127.0.0.1:4723/status > /dev/null 2>&1; then
                 echo "Appium Server 已就绪"
@@ -44,19 +44,26 @@ jobs:
             done
           fi
 
-      - name: Run Appium Tests (local project)
-        working-directory: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android
+      # ===== 3. 执行 Appium 测试（java-automation 工程） =====
+      - name: Run Appium Tests (java-automation)
+        working-directory: /Users/psdcdmacmini/Desktop/GPF_CI/java-automation
+        env:
+          GPF_E2E_PLATFORM: android
+          GPF_E2E_APP_PATH: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android/app/build/outputs/apk/stg/debug/app-stg-debug.apk
+          # 如果要用真机/指定模拟器，取消下一行注释并填入 UDID
+          # GPF_E2E_UDID: 你的设备UDID
         run: ./gradlew test --stacktrace
 
       # ===== 关键改动 3：APK 路径改成你本地工程的产物路径 =====
-      - name: Upload APK (optional)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-apk
-          path: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android/app/build/outputs/apk/stg/debug/*.apk
-          retention-days: 7
+#      - name: Upload APK (optional)
+#        if: always()
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: debug-apk
+#          path: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android/app/build/outputs/apk/stg/debug/*.apk
+#          retention-days: 7
 
+      # ===== 5. 清理 Appium 进程 =====
       - name: Stop Appium Server
         if: always()
         run: |
