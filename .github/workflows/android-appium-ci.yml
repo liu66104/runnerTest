@@ -2,12 +2,11 @@ name: Android Appium CI
 
 on:
   push:
-    branches: [ main, master ,develop]
+    branches: [ main, master, develop ]
   workflow_dispatch:  # 支持手动触发
 
 jobs:
   build-and-test:
-    # 精准匹配你 Mac 上的 Runner（已配置标签 mac-appium）
     runs-on: [self-hosted, mac-appium]
 
     steps:
@@ -18,23 +17,24 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'   # 根据你的项目调整，java-client v9+ 需要 Java 11 以上
+          java-version: '17'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x ./gradlew
+      # ===== 关键改动 1：进入你本地工程目录，赋权 =====
+      - name: Grant execute permission for gradlew (local project)
+        run: chmod +x /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android/gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      # ===== 关键改动 2：用绝对路径在你本地工程里构建 =====
+      - name: Build Debug APK (local project)
+        working-directory: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android
+        run: ./gradlew assembleStgDebug --stacktrace
 
       - name: Start Appium Server
         run: |
-          # 先检查是否已有 Appium 在运行，避免端口冲突
           if lsof -i :4723 > /dev/null 2>&1; then
             echo "Appium 已在 4723 端口运行，跳过启动"
           else
             echo "启动 Appium Server..."
             appium --log-level error --log ./appium.log &
-            # 等待服务就绪
             for i in {1..30}; do
               if curl -s http://127.0.0.1:4723/status > /dev/null 2>&1; then
                 echo "Appium Server 已就绪"
@@ -44,23 +44,20 @@ jobs:
             done
           fi
 
-      - name: Run Appium Tests
-        run: |
-          # 根据你的测试工程调整命令
-          # 如果测试代码和应用在同一 Gradle 项目：
-          ./gradlew test --stacktrace
-          # 如果是独立模块，可改用：./gradlew :your-test-module:test
+      - name: Run Appium Tests (local project)
+        working-directory: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android
+        run: ./gradlew test --stacktrace
 
+      # ===== 关键改动 3：APK 路径改成你本地工程的产物路径 =====
       - name: Upload APK (optional)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android/app/build/outputs/apk/stg/debug/*.apk
           retention-days: 7
 
       - name: Stop Appium Server
         if: always()
         run: |
-          # 清理后台 Appium 进程
           pkill -f "appium" || true
