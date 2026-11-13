@@ -27,7 +27,17 @@ jobs:
         working-directory: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android
         run: ./gradlew assembleStgDebug --stacktrace
 
-      # ===== 2. 启动 Appium Server，显式绑定 127.0.0.1:4723 =====
+      # ===== 2. 先卸载旧包，再安装新包 =====
+      - name: Uninstall old app (ignore if not installed)
+        run: |
+          adb devices
+          adb uninstall com.panasonic.globalsmartapp || echo "旧包不存在或已卸载，继续"
+
+      - name: Install new APK
+        run: |
+          adb install -r /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android/app/build/outputs/apk/stg/debug/app-stg-debug.apk
+
+      # ===== 3. 启动 Appium Server，绑定 127.0.0.1:4723 =====
       - name: Start Appium Server
         run: |
           if lsof -i :4723 > /dev/null 2>&1; then
@@ -44,26 +54,26 @@ jobs:
             done
           fi
 
-      # ===== 3. 执行 Appium 测试（java-automation 工程） =====
+      # ===== 4. 执行 Appium 测试（java-automation 工程） =====
       - name: Run Appium Tests (java-automation)
         working-directory: /Users/psdcdmacmini/Desktop/GPF_CI/java-automation
         env:
           GPF_E2E_PLATFORM: android
           GPF_E2E_APP_PATH: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android/app/build/outputs/apk/stg/debug/app-stg-debug.apk
-          # 如果要用真机/指定模拟器，取消下一行注释并填入 UDID
-          # GPF_E2E_UDID: 你的设备UDID
+          # 需要指定设备时取消注释
+          # GPF_E2E_UDID: emulator-5554
         run: ./gradlew test --stacktrace
 
-      # ===== 关键改动 3：APK 路径改成你本地工程的产物路径 =====
-#      - name: Upload APK (optional)
-#        if: always()
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: debug-apk
-#          path: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android/app/build/outputs/apk/stg/debug/*.apk
-#          retention-days: 7
+      # ===== 5. 上传 APK 产物 =====
+     #   - name: Upload APK (optional)
+    #      if: always()
+     #     uses: actions/upload-artifact@v4
+     #     with:
+     #       name: debug-apk
+      #      path: /Users/psdcdmacmini/Desktop/GPF_CI/gpf_android/app/build/outputs/apk/stg/debug/*.apk
+      #      retention-days: 7
 
-      # ===== 5. 清理 Appium 进程 =====
+      # ===== 6. 清理 Appium 进程 =====
       - name: Stop Appium Server
         if: always()
         run: |
