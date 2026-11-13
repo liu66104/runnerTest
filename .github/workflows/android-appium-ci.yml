@@ -2,7 +2,7 @@ name: Android Appium CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master ,develop]
   workflow_dispatch:  # 支持手动触发
 
 jobs:
